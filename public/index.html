@@ -1,0 +1,1219 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Faturamento — Controle de Contratos</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #21262d;
+    --border: #30363d;
+    --text: #e6edf3;
+    --text-muted: #7d8590;
+    --green: #3fb950;
+    --green-bg: #0d3320;
+    --yellow: #d29922;
+    --yellow-bg: #2e1f00;
+    --red: #f85149;
+    --red-bg: #3d0c0b;
+    --blue: #58a6ff;
+    --blue-bg: #0d2340;
+    --orange: #e3b341;
+    --orange-bg: #2e1e00;
+    --purple: #bc8cff;
+    --purple-bg: #1e0f3a;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    font-size: 14px;
+  }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 60px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .topbar-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: -0.3px;
+  }
+  .topbar-brand .dot {
+    width: 10px; height: 10px;
+    background: var(--green);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.4; } }
+  .topbar-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  #clock { font-family: 'DM Mono', monospace; font-size: 15px; color: var(--text); }
+  .month-label {
+    background: var(--blue-bg);
+    color: var(--blue);
+    border: 1px solid var(--blue);
+    border-radius: 6px;
+    padding: 4px 12px;
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  /* ── LAYOUT ── */
+  .layout { display: flex; min-height: calc(100vh - 60px); }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    padding: 20px 0;
+    position: sticky;
+    top: 60px;
+    height: calc(100vh - 60px);
+    overflow-y: auto;
+  }
+  .sidebar-section { padding: 0 12px; margin-bottom: 8px; }
+  .sidebar-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 8px;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    color: var(--text-muted);
+    font-weight: 500;
+    transition: all 0.15s;
+    font-size: 13px;
+  }
+  .nav-item:hover { background: var(--surface2); color: var(--text); }
+  .nav-item.active { background: var(--surface2); color: var(--text); }
+  .nav-item .badge {
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-yellow { background: var(--yellow-bg); color: var(--yellow); }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-blue { background: var(--blue-bg); color: var(--blue); }
+  .badge-orange { background: var(--orange-bg); color: var(--orange); }
+  .badge-gray { background: var(--surface2); color: var(--text-muted); }
+
+  /* ── MAIN ── */
+  .main {
+    flex: 1;
+    padding: 24px;
+    overflow-y: auto;
+  }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    background: var(--red-bg);
+    border: 1px solid var(--red);
+    border-radius: var(--radius);
+    padding: 14px 18px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    animation: slideIn 0.3s ease;
+  }
+  @keyframes slideIn { from { transform: translateY(-10px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+  .alert-banner .icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .alert-banner .title { font-weight: 700; color: var(--red); margin-bottom: 4px; }
+  .alert-banner .items { font-size: 13px; color: #ffb3b0; line-height: 1.7; }
+
+  /* ── SUMMARY CARDS ── */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 14px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .card:hover { border-color: var(--blue); transform: translateY(-1px); }
+  .card.active { border-color: var(--blue); }
+  .card-num {
+    font-size: 32px;
+    font-weight: 700;
+    font-family: 'DM Mono', monospace;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .card-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+  .card-sub { font-size: 11px; color: var(--text-muted); margin-top: 6px; }
+
+  /* ── SEARCH / FILTERS ── */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .search-wrap { position: relative; flex: 1; min-width: 200px; }
+  .search-wrap input {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 9px 12px 9px 36px;
+    font-family: inherit;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .search-wrap input:focus { border-color: var(--blue); }
+  .search-wrap .search-icon {
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-muted);
+    font-size: 14px;
+  }
+  .filter-btn {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    padding: 8px 14px;
+    font-family: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 500;
+  }
+  .filter-btn:hover, .filter-btn.active { border-color: var(--blue); color: var(--blue); background: var(--blue-bg); }
+
+  /* ── TABLE ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .table-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .table-title { font-weight: 600; font-size: 14px; }
+  .table-count { font-size: 12px; color: var(--text-muted); }
+
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    background: var(--surface2);
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr { border-bottom: 1px solid var(--border); transition: background 0.1s; }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface2); }
+  td { padding: 11px 16px; font-size: 13px; vertical-align: middle; }
+  td.cont { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-muted); }
+  td.cliente { font-weight: 600; }
+  td.coleta { font-family: 'DM Mono', monospace; }
+
+  /* ── STATUS PILLS ── */
+  .status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 99px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .status::before { content: ''; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+  .s-faturado { background: var(--green-bg); color: var(--green); border: 1px solid #1a5e2a; }
+  .s-faturado::before { background: var(--green); }
+  .s-pendente { background: var(--blue-bg); color: var(--blue); border: 1px solid #1a3a6e; }
+  .s-pendente::before { background: var(--blue); }
+  .s-atrasado { background: var(--red-bg); color: var(--red); border: 1px solid #6e1a1a; }
+  .s-atrasado::before { background: var(--red); animation: pulse 1s infinite; }
+  .s-esquecido { background: var(--purple-bg); color: var(--purple); border: 1px solid #4a2080; }
+  .s-esquecido::before { background: var(--purple); }
+  .s-hoje { background: var(--yellow-bg); color: var(--yellow); border: 1px solid #6e4400; }
+  .s-hoje::before { background: var(--yellow); animation: pulse 1.2s infinite; }
+
+  /* ── ACTION BTN ── */
+  .btn-faturar {
+    background: var(--green-bg);
+    color: var(--green);
+    border: 1px solid #1a5e2a;
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-faturar:hover { background: var(--green); color: #000; }
+  .btn-faturado-ok {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-faturado-ok:hover { border-color: var(--red); color: var(--red); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 28px;
+    width: 480px;
+    max-width: 95vw;
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn { from { transform: scale(0.95); opacity: 0; } to { transform:scale(1); opacity:1; } }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 18px; }
+  .modal-list { display: flex; flex-direction: column; gap: 10px; max-height: 400px; overflow-y: auto; }
+  .modal-item {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .modal-item-info { flex: 1; min-width: 0; }
+  .modal-item-name { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
+  .modal-item-sub { font-size: 12px; color: var(--text-muted); }
+  .modal-close {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text);
+    padding: 10px 20px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 18px;
+    font-weight: 600;
+    width: 100%;
+    transition: background 0.15s;
+  }
+  .modal-close:hover { background: var(--border); }
+
+  /* ── TOAST ── */
+  #toast-container {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    z-index: 300;
+  }
+  .toast {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 280px;
+    max-width: 380px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    animation: toastIn 0.25s ease;
+  }
+  @keyframes toastIn { from { transform: translateX(40px); opacity:0; } to { transform:translateX(0); opacity:1; } }
+  .toast.success { border-color: var(--green); }
+  .toast.warning { border-color: var(--red); }
+  .toast-icon { font-size: 20px; }
+  .toast-msg { font-size: 13px; font-weight: 500; }
+  .toast-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+
+  /* ── MONTH PICKER ── */
+  .month-modal-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 14px;
+  }
+  .month-opt {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    text-align: center;
+    cursor: pointer;
+    font-family: inherit;
+    color: var(--text);
+    font-size: 13px;
+    font-weight: 500;
+    transition: all 0.15s;
+  }
+  .month-opt:hover, .month-opt.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); }
+
+  /* ── COLETA DAY BADGE ── */
+  .day-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-family: 'DM Mono', monospace;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .day-past { background: var(--surface2); color: var(--text-muted); }
+  .day-today { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow); }
+  .day-future { background: var(--blue-bg); color: var(--blue); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-wrap { margin-bottom: 24px; }
+  .progress-label { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; color: var(--text-muted); }
+  .progress-track { background: var(--surface2); border-radius: 99px; height: 8px; overflow: hidden; }
+  .progress-fill { height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--green), #56d364); transition: width 0.5s ease; }
+
+  .hidden { display: none !important; }
+
+  /* day header in table */
+  .day-group-header td {
+    background: var(--surface2);
+    color: var(--text-muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .cards-grid { grid-template-columns: repeat(2, 1fr); }
+    td:nth-child(3), td:nth-child(7) { display: none; }
+    th:nth-child(3), th:nth-child(7) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="dot"></div>
+    Painel de Faturamento
+  </div>
+  <div class="topbar-right">
+    <span id="clock">--:--:--</span>
+    <button class="month-label" id="monthBtn" onclick="openMonthModal()">Mês: <span id="monthName">--</span></button>
+  </div>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filtros Rápidos</div>
+      <div class="nav-item active" onclick="filterView('todos',this)">
+        📋 Todos <span class="badge badge-gray" id="bdg-todos">0</span>
+      </div>
+      <div class="nav-item" onclick="filterView('atrasado',this)">
+        🔴 Atrasados <span class="badge badge-red" id="bdg-atrasado">0</span>
+      </div>
+      <div class="nav-item" onclick="filterView('esquecido',this)">
+        ⚠️ Esquecidos <span class="badge badge-red" id="bdg-esquecido">0</span>
+      </div>
+      <div class="nav-item" onclick="filterView('hoje',this)">
+        🟡 Coleta Hoje <span class="badge badge-yellow" id="bdg-hoje">0</span>
+      </div>
+      <div class="nav-item" onclick="filterView('pendente',this)">
+        🔵 Pendentes <span class="badge badge-blue" id="bdg-pendente">0</span>
+      </div>
+      <div class="nav-item" onclick="filterView('faturado',this)">
+        ✅ Faturados <span class="badge badge-green" id="bdg-faturado">0</span>
+      </div>
+    </div>
+    <div class="sidebar-section" style="margin-top:16px;">
+      <div class="sidebar-label">Ações</div>
+      <div class="nav-item" onclick="openAlertModal()">🔔 Ver Alertas</div>
+      <div class="nav-item" onclick="exportCSV()">📥 Exportar CSV</div>
+      <div class="nav-item" onclick="resetMonth()">🔄 Resetar Mês</div>
+    </div>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+    <!-- ALERT BANNER -->
+    <div class="alert-banner" id="alertBanner">
+      <div class="icon">🚨</div>
+      <div>
+        <div class="title">Atenção! Contratos precisam de ação</div>
+        <div class="items" id="alertItems">Carregando...</div>
+      </div>
+    </div>
+
+    <!-- PROGRESS -->
+    <div class="progress-wrap">
+      <div class="progress-label">
+        <span>Progresso do Mês</span>
+        <span id="progressText">0 / 0 faturados</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- CARDS -->
+    <div class="cards-grid" id="cardsGrid">
+        <div class="card" onclick="filterView('todos',null)">
+        <div class="card-num" style="color:#000" id="c-total">0</div>
+        <div class="card-label">Total de Contratos</div>
+      </div>
+      <div class="card" onclick="filterView('faturado',null)">
+        <div class="card-num" style="color:var(--green)" id="c-fat">0</div>
+        <div class="card-label">✅ Faturados</div>
+      </div>
+      <div class="card" onclick="filterView('pendente',null)">
+        <div class="card-num" style="color:var(--blue)" id="c-pend">0</div>
+        <div class="card-label">🔵 Pendentes</div>
+      </div>
+      <div class="card" onclick="filterView('hoje',null)">
+        <div class="card-num" style="color:var(--yellow)" id="c-hoje">0</div>
+        <div class="card-label">🟡 Coleta Hoje</div>
+      </div>
+      <div class="card" onclick="filterView('atrasado',null)">
+        <div class="card-num" style="color:var(--red)" id="c-atras">0</div>
+        <div class="card-label">🔴 Atrasados</div>
+      </div>
+      <div class="card" onclick="filterView('esquecido',null)">
+        <div class="card-num" style="color:var(--purple)" id="c-esq">0</div>
+        <div class="card-label">⚠️ Esquecidos</div>
+      </div>
+    </div>
+
+    <!-- TOOLBAR -->
+    <div class="toolbar">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Buscar cliente, contato, contrato..." oninput="renderTable()">
+      </div>
+      <button class="filter-btn" onclick="toggleSort()" id="sortBtn">📅 Ordenar por Coleta</button>
+      <button class="filter-btn" onclick="filterView('atrasado',null)">🔴 Só Atrasados</button>
+      <button class="filter-btn" onclick="filterView('todos',null)">📋 Todos</button>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-wrap">
+      <div class="table-header">
+        <div class="table-title">Contratos do Mês — <span id="tableMonthLabel">--</span></div>
+        <div class="table-count" id="tableCount">0 contratos</div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>CONT.</th>
+              <th>CLIENTE</th>
+              <th>CONTATO</th>
+              <th>DIA COLETA</th>
+              <th>VENCIMENTO</th>
+              <th>PROCESSO</th>
+              <th>STATUS</th>
+              <th>AÇÃO</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ALERT MODAL -->
+<div class="modal-overlay" id="alertModal">
+  <div class="modal">
+    <div class="modal-title">🚨 Alertas de Faturamento</div>
+    <div class="modal-list" id="alertModalList"></div>
+    <button class="modal-close" onclick="closeModal('alertModal')">Fechar</button>
+  </div>
+</div>
+
+<!-- MONTH MODAL -->
+<div class="modal-overlay" id="monthModal">
+  <div class="modal">
+    <div class="modal-title">📅 Selecionar Mês de Referência</div>
+    <div style="font-size:13px;color:var(--text-muted)">Escolha o mês para controle de faturamento:</div>
+    <div class="month-modal-grid" id="monthGrid"></div>
+    <div style="margin-top:14px; display:flex; gap:8px; align-items:center;">
+      <select id="yearSelect" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);padding:8px 12px;font-family:inherit;font-size:13px;cursor:pointer;outline:none;"></select>
+    </div>
+    <button class="modal-close" onclick="closeModal('monthModal')">Confirmar</button>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  DATA — todos os contratos da planilha
+// ═══════════════════════════════════════════════════════════════
+const CONTRATOS_RAW = [
+  [205,"FTC","GABRIEL",16,"7 dias corridos","DOC/WHATS","Sim"],
+  [238,"FTC","GABRIEL",16,"7 dias corridos","ZEBRA","Sim"],
+  [393,"HOSPITAL SANTA TEREZINHA","RODRIGO",18,"Todo dia 10","WHATS","Não"],
+  [9,"COLORMINAS - R$ 150,00","MOISES",18,"10 dias corridos","DOC","Não"],
+  [295,"COLORMINAS","MOISES",18,"10 dias corridos","ZEBRA","Não"],
+  [8,"HSJ","MARCOS",25,"3 dias corridos","DOC/WHATS","Não"],
+  [477,"HSJ","MARCOS",25,"3 dias corridos","DATACARD","Sim"],
+  [497,"HSJ CONTRATO NOVO","Marcos",25,"3 dias corridos","ZEBRAS","N/S"],
+  [485,"HSJ","MARCOS",25,"3 dias corridos","ZEBRA","Não"],
+  [293,"TUBARÃO SANEAMENTO","CARLOS",20,"Todo dia 20","DOC/WHATS","Não"],
+  [427,"LIBREPLAST","GUSTAVO",20,"10 dias corridos","DOC","Não"],
+  [154,"CARDALL","ROGERIO",20,"Todo dia 15","DOC/LOCAL","Sim"],
+  [458,"CARDALL","ROGERIO",20,"Todo dia 15","ZEBRA","Sim"],
+  [323,"MIX TUBARÃO","RECEPÇÃO",20,"Todo dia 10","DOC/WHATS","Sim"],
+  [16,"CARMINATI","EDUARDO",20,"Todo dia 10","E-MAIL","Sim"],
+  [27,"BISTEK FRIGORIFICO","LUCAS",21,"Todo dia 15","DOC","Não"],
+  [28,"BISTEK CD","JORGE",21,"Todo dia 15","DOC","Não"],
+  [420,"BISTEK COCAL LJ 06","MARCOS",21,"Todo dia 15","DOC","Não"],
+  [360,"BISTEK CRICIÚMA LJ 10","ELAINE",21,"Todo dia 15","DOC/WHATS","Não"],
+  [362,"BISTEK CRICIÚMA LJ 02","ELAINE",21,"Todo dia 15","DOC","Não"],
+  [367,"BISTEK SÃO JOSE LJ 16","ANDERSON",21,"Todo dia 15","DOC","Não"],
+  [365,"BISTEK SÃO JOSÉ LJ 11","ANDERSON",21,"Todo dia 15","DOC","Não"],
+  [379,"BISTEK SÃO JOSÉ LJ 25","ANDERSON",21,"Todo dia 15","DOC","Não"],
+  [504,"BISTEK TRAMANDAI","",21,"Todo dia 15","DOC","Não"],
+  [383,"BISTEK NAVEGANTES","",21,"Todo dia 15","DOC","Não"],
+  [366,"BISTEK FLORIPA LJ 12","JOSE",21,"Todo dia 15","DOC","Não"],
+  [369,"BISTEK FLORIPA LJ 22","JOSE",21,"Todo dia 15","DOC","Não"],
+  [370,"BISTEK FLORIPA LJ 19","JOSE",21,"Todo dia 15","DOC","Não"],
+  [375,"BISTEK BRUSQUE LJ 07","FABIANO",21,"Todo dia 15","DOC","Não"],
+  [462,"BISTEK ITAJAÍ LJ 18","JOÃO",21,"Todo dia 15","DOC","Não"],
+  [364,"BISTEK LAGES LJ 05","JEAN",21,"Todo dia 15","DOC","Não"],
+  [361,"BISTEK NOVA VENEZA LJ 14","LIMA",21,"Todo dia 15","DOC","Não"],
+  [381,"BISTEK COMERCIAL LJ 10","ELAINE",21,"Todo dia 15","DOC","Não"],
+  [394,"BISTEK POA LJ 26","MARLENE",21,"Todo dia 15","DOC","Não"],
+  [397,"BISTEK POA CD","WILLIAM",21,"Todo dia 15","WHATS","Não"],
+  [396,"BISTEK TORRES LJ 27","ROBSON",21,"Todo dia 15","DOC","Não"],
+  [437,"BISTEK PALHOÇA LJ 20","ANDERSON",21,"Todo dia 15","DOC","Não"],
+  [29,"BISTEK MATRIZ","MARIANA",21,"Todo dia 15","DOC","Não"],
+  [491,"BISTEK LOJA 30","",21,"Todo dia 15","WHATS","Não"],
+  [422,"TERMINAL INTERMODAL SUL","NEIDE/ISRAEL",22,"10 dias corridos","DOC/WHATS","Sim"],
+  [335,"METASUL","GISLENE",22,"10 dias corridos","WHATS","Não"],
+  [409,"ONKOLOGICA","ELIEZER",22,"10 dias corridos","ZEBRA","Sim"],
+  [325,"CLINIIMAGEM TURVO","ROSANE",23,"10 dias corridos","WHATS","Não"],
+  [20,"CLINIIMAGEM ARARANGUÁ","ALESSANDRO",23,"10 dias corridos","WHATS","Não"],
+  [19,"CLINIIMAGEM CRICIÚMA","ALESSANDRO",23,"10 a 20 dias corridos","WHATS","Não"],
+  [21,"CLINIIMAGEM IÇARA","LÚCIA",23,"10 dias corridos","WHATS","Não"],
+  [54,"CLINIIMAGEM FORQUILHINHA","CHARLENE",23,"10 dias corridos","WHATS","Não"],
+  [451,"CLINIIMAGEM CLINIGASTRO","ALESSANDRO",23,"10 dias corridos","WHATS","Não"],
+  [153,"CARBONÍFERA CATARINENSE","ELIVELTON",24,"10 dias corridos","WHATS","Sim"],
+  [35,"FEBAVE","PAULO/RYAN",24,"10 dias corridos","DOC/WHATS","Não"],
+  [148,"EXPRESSO FORQUILHINHA","FERNANDO",25,"10 dias corridos","E-MAIL","Sim"],
+  [483,"MAESTRO","HENRIQUE",25,"10 dias corridos","DOC","Sim"],
+  [31,"SAÚDE SÃO JOSÉ","JOÃO VITOR",25,"9 dias corridos","DOC/WHATS","Não"],
+  [489,"SAÚDE SÃO JOSÉ","JOÃO VITOR",25,"10 dias corridos","DOC/WHATS","Sim"],
+  [333,"SAÚDE SÃO JOSÉ","JOÃO VITOR",25,"9 dias corridos","ZEBRA","Sim"],
+  [416,"IBRAP","ANA",26,"Todo dia 25","DOC","Sim"],
+  [425,"IBRAP","ANA",26,"Todo dia 25","DOC/WHATS","Sim"],
+  [34,"CYSY (COQUESUL)","JHONANTAN",26,"10 dias corridos","DOC/WHATS","Não"],
+  [42,"MICHEL","ROSE",26,"10 dias corridos","LOCAL","Não"],
+  [158,"COPAZA","AMANDA",26,"10 dias corridos","DOC","Não"],
+  [168,"MOLDURARTE","DICKSON",26,"10 dias corridos","DOC/WHATS","Sim"],
+  [174,"RESICOLOR","HENRIQUE",26,"10 dias corridos","DOC/WHATS","Não"],
+  [48,"DE MOLINER","JANE",27,"Todo dia 15","WHATS","Sim"],
+  [161,"FRETTA","ISRAEL",27,"10 dias corridos","WHATS","Não"],
+  [175,"RICCIERI","RODRIGO",27,"Todo dia 15","DOC/WHATS","Sim"],
+  [221,"PRO-ECOLOGIC","ISABELY",27,"Todo dia 15","WHATS","Sim"],
+  [282,"CAPITAL PROMOTORA","RAFAEL",27,"Todo dia 15","WHATS","Sim"],
+  [345,"UNIMED CRICIÚMA (ARARANGUÁ)","ADRIANE",27,"10 dias corridos","DOC","Não"],
+  [296,"UNIMED CRICIÚMA","HELLEN",27,"10 dias corridos","DOC","Não"],
+  [315,"GESTAR","BEATRIZ",27,"Todo dia 15","WHATS","Não"],
+  [419,"LABORATÓRIO SANTA CATARINA","DOUGLAS",28,"Todo dia 15","DOC/WHATS","Não"],
+  [430,"FUND. HOSPITALAR SANTA OTÍLIA","LUCAS",28,"Todo dia 10","ZEBRA","Não"],
+  [36,"COOPERSULCA","ARTUR",28,"10 dias corridos","DOC/WHATS","Não"],
+  [412,"PLASZOM III","LARINE",28,"10 dias corridos","LOCAL","Sim"],
+  [454,"PLASZOM III","GUSTAVO",28,"10 dias corridos","ZEBRA","Sim"],
+  [15,"COPOSUL","DOUGLAS",29,"Todo dia 15","E-MAIL/WHATS","Sim"],
+  [135,"COPOBRAS MINAS","ANDRE/WAGNER",29,"Todo dia 15","DOC/E-MAIL","Não"],
+  [136,"COPOBRAS III","FABIANO",29,"Todo dia 15","DOC/E-MAIL","Não"],
+  [137,"COPOBRAS I","FABIANO",29,"Todo dia 15","DOC/E-MAIL","Não"],
+  [138,"COPOBRAS II","FABIANO",29,"Todo dia 15","DOC/E-MAIL","Não"],
+  [139,"COPOBRAS SL","FABIANO",29,"Todo dia 15","DOC/E-MAIL","Não"],
+  [306,"COPOBRAS SP","FABIANO",29,"Todo dia 15","DOC/E-MAIL","Sim"],
+  [496,"COPOBRAS PR","REGINALDO",29,"Todo dia 15","E-MAIL","Sim"],
+  [488,"TABELIONATO DE NOTAS","ALEXANDRE",30,"Todo dia 15","DOC","Sim"],
+  [177,"SANTA LUZIA","ANTONIO",30,"10 dias corridos","DOC/WHATS","Não"],
+  [474,"SANTA LUZIA","ANTONIO",30,"10 dias corridos","DOC/WHATS","Sim"],
+  [389,"SANTA LUZIA","ANTONIO",30,"10 dias corridos","ZEBRA","Sim"],
+  [13,"COLEGIO SÃO BENTO","",30,"Todo dia 30","DOC/LOCAL",""],
+  [14,"COLEGIO SÃO BENTO","",30,"Todo dia 30","DOC/LOCAL",""],
+  [15,"COLEGIO SÃO BENTO","",30,"Todo dia 30","DOC/LOCAL",""],
+  [185,"TERMOVALE","RAIANI/CAROL",30,"10 dias corridos","WHATS","Sim"],
+  [501,"CONTABILSUL","ALICE",30,"10 dias corridos","E-MAIL","Não"],
+  [317,"GOES E NICOLADELLI","LEONARDO",30,"10 dias corridos","DOC/WHATS","Não"],
+  [272,"ORLECONT","JÚNIOR",30,"Todo dia 20","WHATS","Sim"],
+  [309,"JAN ENVASADORA (DA GUARDA)","LARISSA",1,"15 dias corridos","E-MAIL","Sim"],
+  [406,"LOCATIVA SCANNER","GESIANE",1,"10 dias corridos","WHATS","Sim"],
+  [330,"LOCATIVA","PAULO",1,"10 dias corridos","LOCAL/E-MAIL","Não"],
+  [395,"LOCATIVA ZEBRA","PAULO",1,"10 dias corridos","ZEBRA","Não"],
+  [376,"DVG (TUBOZAN)","SANDRA",1,"Todo dia 20","DOC","Sim"],
+  [338,"KFG","ANTONIO/JOSIEL",1,"Todo dia 15","DOC/WHATS","Sim"],
+  [276,"URC RESSONÂNCIA MAGNÉTICA","MARILZA",1,"Todo dia 20","DOC/LOCAL","Não"],
+  [410,"URC ZEBRA","MARILZA",1,"Todo dia 20","ZEBRA","Não"],
+  [279,"URC TOMO. COMPUTADORIZADA","MARILZA",1,"Todo dia 20","DOC/LOCAL","Não"],
+  [312,"URC SÃO LUCAS","MARILZA",1,"Todo dia 20","DOC/LOCAL","Não"],
+  [479,"ICON","CRISTIANO",2,"Todo dia 20","DOC/LOCAL","Sim"],
+  [484,"ICON","CRISTIANO",2,"Todo dia 20","DOC/LOCAL","Não"],
+  [391,"SOMBRIO CURSOS","THUANY",2,"Todo dia 20","WHATS","Sim"],
+  [392,"MW CURSOS ARARANGUÁ","TATIANE",2,"Todo dia 20","WHATS","Sim"],
+  [132,"VIAÇÃO SÃO JOSÉ","VANESSA",3,"10 dias corridos","WHATS","Sim"],
+  [152,"CAMARA LAURO MÜLLER","ANTÔNIO",3,"Todo dia 28","WHATS","Sim"],
+  [326,"POUSADA DI VENEZIA","LUAN",3,"10 dias corridos","DOC/WHATS","Sim"],
+  [340,"MELT MASTER (MMR)","FABIANA",3,"10 dias corridos","WHATS","Não"],
+  [500,"SANJO KONICA","FERNANDO",3,"n/D","LOCAL","Sim"],
+  [176,"SANJO","FERNANDO",3,"5 dias corridos","DOC/LOCAL","Sim"],
+  [470,"FONTANA (MATRIZ COLOR A4)","GHUSTAVO",4,"10 dias corridos","WHATS","Sim"],
+  [471,"FONTANA (MATRIZ MARKETING)","GHUSTAVO",4,"10 dias corridos","DOC","Sim"],
+  [473,"FONTANA (MATRIZ)","GHUSTAVO",4,"10 dias corridos","DOC/WHATS","Sim"],
+  [472,"FONTANA (MATRIZ ENGENH. A3)","GHUSTAVO",4,"10 dias corridos","DOC","Sim"],
+  [464,"FONTANA (OBRAS)","GHUSTAVO",4,"10 dias corridos","WHATS","Sim"],
+  [442,"MEDICINA CABRAL","TINA",4,"7 dias corridos","WHATS","Sim"],
+  [460,"PLASZOM II","JERUSA",4,"10 dias corridos","WHATS","Sim"],
+  [429,"COLÉGIO MONSENHOR","BRUNA",4,"Todo dia 10","WHATS","Sim"],
+  [358,"NIC","RAMON",5,"Todo dia 20","DOC/LOCAL","Não"],
+  [382,"NIC ADMINISTRATIVO","RAMON",5,"Todo dia 20","LOCAL","Não"],
+  [3,"LIBRELATO IÇARA","FRANCIANE",5,"Todo dia 27","DOC/LOCAL","Não"],
+  [482,"LIBRELATO IÇARA","FRANCIANE",5,"Todo dia 27","DOC/LOCAL","Não"],
+  [7,"LIBRELATO CRICIÚMA","FRANCIANE",5,"Todo dia 27","DOC/LOCAL","Não"],
+  [445,"STHALL (LIBRELATO)","JOÃO VITOR",5,"Todo dia 27","DOC/WHATS","Não"],
+  [434,"CHAPAM","SAIMON",5,"10 dias corridos","DOC/WHATS","Sim"],
+  [441,"MADEIRAS BASCHIROTTO","ANE",6,"10 dias corridos","DOC","Sim"],
+  [146,"PROVIDA","LEANDRO",6,"10 dias corridos","DOC/LOCAL","Não"],
+  [356,"PROODONTO","LEANDRO",6,"10 dias corridos","DOC","Não"],
+  [400,"ORTOMED (PROVIDA)","LEANDRO",6,"10 dias corridos","LOCAL","Não"],
+  [223,"ADVENTISTA IMBITUBA","PATRICIA",7,"10 dias corridos","DOC","Não"],
+  [380,"UNIÃO SUL 2","MATEUS",7,"3 dias corridos","DOC","Não"],
+  [224,"UNIÃO SUL","MATEUS",7,"3 dias corridos","DOC/LOCAL","Não"],
+  [241,"ADVENTISTA CENTRO","VICTOR",7,"10 dias corridos","DOC/LOCAL","Não"],
+  [242,"ADVENTISTA ESTREITO","DAVI",7,"10 dias corridos","DOC/LOCAL","Não"],
+  [243,"ADVENTISTA ITAJAÍ","GENIVALDO",7,"10 dias corridos","DOC/LOCAL","Não"],
+  [349,"ADVENTISTA CRICIÚMA","LUCAS",7,"3 dias corridos","DOC/LOCAL","Não"],
+  [413,"ADVENTISTA PALHOÇA","EDSON",7,"10 dias corridos","DOC/LOCAL","Não"],
+  [244,"ADVENTISTA TUBARÃO","ADELSON",7,"10 dias corridos","DOC","Não"],
+  [248,"ADVENTISTA CATRE","KEILA",7,"10 dias corridos","DOC","Não"],
+  [431,"CLINIGASTRO","RAFAEL",8,"10 dias corridos","ZEBRA","Sim"],
+  [8,"USIPE","MARCELO",9,"10 dias corridos","DOC","Sim"],
+  [436,"SINDICATO SAÚDE CRICIÚMA","DEBORA",10,"Todo dia 23","WHATS","Sim"],
+  [423,"JELS CONTABILIDADE","TUANY",10,"Todo dia 20","WHATS","Sim"],
+  [457,"TERRACOTAIGRES","DEISE",11,"10 dias corridos","DOC/LOCAL","Não"],
+  [405,"GDM","LEANDRO",14,"10 dias corridos","LOCAL","Sim"],
+  [498,"STRAWPLAST ZEBRA","SIDMAR",14,"Todo dia 28","ZEBRA","Sim"],
+  [417,"STRAWPLAST","SIDMAR",14,"Todo dia 28","DOC/WHATS","Sim"],
+  [459,"MERCOSUL","MATEUS",15,"7 dias corridos","DOC","Sim"],
+  [51,"CYAN","ANDERSON",15,"8 dias corridos","DOC","Sim"],
+  [304,"CYAN","ANDERSON",15,"8 dias corridos","ZEBRA","Não"],
+  [452,"CYAN","ANDERSON",15,"8 dias corridos","DOC","Sim"],
+  [408,"PLASZOM IV","ARTHUR",15,"10 dias corridos","WHATS","Sim"],
+];
+
+// ═══════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════
+let today = new Date();
+let currentMonth = today.getMonth(); // 0-based
+let currentYear = today.getFullYear();
+let currentFilter = 'todos';
+let sortByDay = true;
+let faturadoState = {}; // { key: {faturado: bool, data: '...'} }
+
+const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+// ═══════════════════════════════════════════════════════════════
+//  STORAGE
+// ═══════════════════════════════════════════════════════════════
+const API_BASE = window.location.port === '3000'
+  ? `${window.location.protocol}//${window.location.hostname}:3001`
+  : window.location.origin;
+const STATUS_API = `${API_BASE}/api/contratos/status`;
+let syncRequestId = 0;
+
+function dataAtualPtBr() {
+  return new Date().toLocaleDateString('pt-BR');
+}
+
+async function loadStateForMonth(ano, mes, options = {}) {
+  const silent = Boolean(options.silent);
+
+  try {
+    const response = await fetch(
+      `${STATUS_API}?year=${encodeURIComponent(ano)}&month=${encodeURIComponent(mes)}`
+    );
+    if (!response.ok) {
+      throw new Error('Falha ao buscar status');
+    }
+    const payload = await response.json();
+    faturadoState = payload && payload.state ? payload.state : {};
+    return true;
+  } catch (error) {
+    faturadoState = {};
+    if (!silent) {
+      showToast('warning', '⚠️ Sem conexão', 'Não foi possível carregar dados do SQLite.');
+    }
+    return false;
+  }
+}
+
+async function persistStatus(contratoKey, faturado, dataMarcacao) {
+  const response = await fetch(STATUS_API, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      year: currentYear,
+      month: currentMonth,
+      contratoKey,
+      faturado,
+      data: dataMarcacao || null,
+    }),
+  });
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    throw new Error(erro.mensagem || 'Falha ao salvar status.');
+  }
+}
+
+async function clearMonthState(ano, mes) {
+  const response = await fetch(
+    `${STATUS_API}?year=${encodeURIComponent(ano)}&month=${encodeURIComponent(mes)}`,
+    { method: 'DELETE' }
+  );
+
+  if (!response.ok) {
+    const erro = await response.json().catch(() => ({}));
+    throw new Error(erro.mensagem || 'Falha ao resetar status do mês.');
+  }
+}
+
+async function refreshStateAndRender(options = {}) {
+  const requestId = ++syncRequestId;
+  await loadStateForMonth(currentYear, currentMonth, options);
+  if (requestId !== syncRequestId) return;
+  renderTable();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CONTRATOS — compute status
+// ═══════════════════════════════════════════════════════════════
+function getContratoStatus(c) {
+  const key = `${c[0]}_${c[1]}`;
+  const state = faturadoState[key];
+  if (state && state.faturado) return 'faturado';
+
+  const diaColeta = c[3]; // number or special
+  const now = new Date();
+  const isCurrentMonth = (currentMonth === now.getMonth() && currentYear === now.getFullYear());
+  const todayDay = now.getDate();
+
+  // Normalize coleta day: for days 1-15 appearing after day 15 in list, they belong to next month
+  // Days like 1,2,3,4,5,6,7,8,9,10,11,14,15 are "início do mês seguinte" or same month
+  // We treat all equally: compare with today's day in current month
+  const coletaDay = parseInt(diaColeta);
+
+  if (!isCurrentMonth) {
+    // viewing another month — just show as pendente
+    return 'pendente';
+  }
+
+  if (coletaDay === todayDay) return 'hoje';
+  if (coletaDay < todayDay) {
+    // passou a data — esquecido se dia coleta <= today - 3, atrasado se <= today
+    const diff = todayDay - coletaDay;
+    if (diff >= 3) return 'esquecido';
+    return 'atrasado';
+  }
+  return 'pendente';
+}
+
+function statusLabel(s) {
+  const map = {
+    faturado: ['s-faturado','✅ Faturado'],
+    pendente: ['s-pendente','🔵 Pendente'],
+    hoje: ['s-hoje','🟡 Hoje'],
+    atrasado: ['s-atrasado','🔴 Atrasado'],
+    esquecido: ['s-esquecido','⚠️ Esquecido'],
+  };
+  return map[s] || ['s-pendente','Pendente'];
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════════════
+function getFilteredContratos() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  let list = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+
+  if (currentFilter !== 'todos') {
+    list = list.filter(c => c.status === currentFilter);
+  }
+  if (q) {
+    list = list.filter(c =>
+      String(c.raw[0]).includes(q) ||
+      c.raw[1].toLowerCase().includes(q) ||
+      c.raw[2].toLowerCase().includes(q) ||
+      c.raw[5].toLowerCase().includes(q)
+    );
+  }
+  if (sortByDay) list.sort((a,b) => a.raw[3] - b.raw[3]);
+  return list;
+}
+
+function renderTable() {
+  const tbody = document.getElementById('tableBody');
+  const list = getFilteredContratos();
+  document.getElementById('tableCount').textContent = `${list.length} contratos`;
+  document.getElementById('tableMonthLabel').textContent = `${MONTHS_PT[currentMonth]} ${currentYear}`;
+
+  let html = '';
+  let lastDay = null;
+
+  list.forEach(({raw: c, status}) => {
+    const key = `${c[0]}_${c[1]}`;
+    const day = c[3];
+    const [cls, label] = statusLabel(status);
+
+    if (sortByDay && day !== lastDay) {
+      lastDay = day;
+      html += `<tr class="day-group-header"><td colspan="8">📅 DIA DE COLETA: ${day}</td></tr>`;
+    }
+
+    const now = new Date();
+    const todayDay = now.getDate();
+    const isCurrentMonth = (currentMonth === now.getMonth() && currentYear === now.getFullYear());
+    let dayCls = 'day-past';
+    if (!isCurrentMonth) dayCls = 'day-future';
+    else if (day === todayDay) dayCls = 'day-today';
+    else if (day > todayDay) dayCls = 'day-future';
+
+    const isFat = status === 'faturado';
+    const actionBtn = isFat
+      ? `<button class="btn-faturado-ok" onclick="toggleFaturado('${key}')">↩ Desfazer</button>`
+      : `<button class="btn-faturar" onclick="toggleFaturado('${key}')">Marcar Faturado</button>`;
+
+    html += `
+      <tr data-key="${key}">
+        <td class="cont">${c[0]}</td>
+        <td class="cliente">${c[1]}</td>
+        <td>${c[2] || '—'}</td>
+        <td><span class="day-badge ${dayCls}">${day}</span></td>
+        <td style="font-size:12px;color:var(--text-muted)">${c[4]}</td>
+        <td><code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;">${c[5]}</code></td>
+        <td><span class="status ${cls}">${label}</span></td>
+        <td>${actionBtn}</td>
+      </tr>`;
+  });
+
+  if (!html) {
+    html = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-muted);">Nenhum contrato encontrado</td></tr>`;
+  }
+
+  tbody.innerHTML = html;
+  updateCounters();
+}
+
+function updateCounters() {
+  const all = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+  const counts = {todos:0, faturado:0, pendente:0, hoje:0, atrasado:0, esquecido:0};
+  all.forEach(({status}) => { counts[status]++; counts.todos++; });
+
+  document.getElementById('c-total').textContent = counts.todos;
+  document.getElementById('c-fat').textContent = counts.faturado;
+  document.getElementById('c-pend').textContent = counts.pendente;
+  document.getElementById('c-hoje').textContent = counts.hoje;
+  document.getElementById('c-atras').textContent = counts.atrasado;
+  document.getElementById('c-esq').textContent = counts.esquecido;
+
+  document.getElementById('bdg-todos').textContent = counts.todos;
+  document.getElementById('bdg-faturado').textContent = counts.faturado;
+  document.getElementById('bdg-pendente').textContent = counts.pendente;
+  document.getElementById('bdg-hoje').textContent = counts.hoje;
+  document.getElementById('bdg-atrasado').textContent = counts.atrasado;
+  document.getElementById('bdg-esquecido').textContent = counts.esquecido;
+
+  // progress
+  const pct = counts.todos > 0 ? Math.round((counts.faturado / counts.todos) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressText').textContent = `${counts.faturado} / ${counts.todos} faturados (${pct}%)`;
+
+  // alert banner
+  const alertItems = [];
+  if (counts.esquecido > 0) alertItems.push(`• ${counts.esquecido} contrato(s) ESQUECIDO(S) — não foram faturados após a data de coleta`);
+  if (counts.atrasado > 0) alertItems.push(`• ${counts.atrasado} contrato(s) ATRASADO(S) — data de coleta já passou`);
+  if (counts.hoje > 0) alertItems.push(`• ${counts.hoje} contrato(s) com coleta HOJE — não esqueça de faturar!`);
+
+  if (alertItems.length > 0) {
+    document.getElementById('alertBanner').style.display = '';
+    document.getElementById('alertItems').innerHTML = alertItems.join('<br>');
+  } else {
+    document.getElementById('alertBanner').style.display = 'none';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ACTIONS
+// ═══════════════════════════════════════════════════════════════
+async function toggleFaturado(key) {
+  const previous = faturadoState[key] ? { ...faturadoState[key] } : null;
+  if (!faturadoState[key]) faturadoState[key] = {};
+
+  const wasFat = Boolean(faturadoState[key].faturado);
+  const nowFat = !wasFat;
+
+  faturadoState[key].faturado = nowFat;
+  if (nowFat) {
+    faturadoState[key].data = dataAtualPtBr();
+    const c = CONTRATOS_RAW.find(x => `${x[0]}_${x[1]}` === key);
+    showToast('success', '✅ Faturado!', `${c ? c[1] : key} marcado como faturado`);
+  } else {
+    delete faturadoState[key].data;
+  }
+
+  renderTable();
+
+  try {
+    await persistStatus(key, nowFat, faturadoState[key].data || null);
+  } catch (error) {
+    if (previous) faturadoState[key] = previous;
+    else delete faturadoState[key];
+    renderTable();
+    showToast('warning', '⚠️ Falha ao salvar', 'Não foi possível atualizar no SQLite.');
+  }
+}
+
+function filterView(type, el) {
+  currentFilter = type;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  renderTable();
+}
+
+function toggleSort() {
+  sortByDay = !sortByDay;
+  document.getElementById('sortBtn').textContent = sortByDay ? '📅 Ordenar por Coleta' : '🔤 Ordem Original';
+  renderTable();
+}
+
+async function resetMonth() {
+  if (!confirm(`Resetar todos os status de faturamento de ${MONTHS_PT[currentMonth]} ${currentYear}?`)) return;
+
+  try {
+    await clearMonthState(currentYear, currentMonth);
+    faturadoState = {};
+    renderTable();
+    showToast('success', '🔄 Resetado', 'Status do mês foram limpos');
+  } catch (error) {
+    showToast('warning', '⚠️ Falha no reset', 'Não foi possível resetar os dados do mês.');
+  }
+}
+
+function exportCSV() {
+  const list = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+  let csv = 'CONT;CLIENTE;CONTATO;DIA COLETA;VENCIMENTO;PROCESSO;FRANQUIA;STATUS\n';
+  list.forEach(({raw: c, status}) => {
+    csv += `${c[0]};"${c[1]}";"${c[2]}";${c[3]};"${c[4]}";"${c[5]}";"${c[6]}";"${status}"\n`;
+  });
+  const blob = new Blob(['\ufeff'+csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `faturamento_${MONTHS_PT[currentMonth]}_${currentYear}.csv`;
+  a.click();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  MODALS
+// ═══════════════════════════════════════════════════════════════
+function openAlertModal() {
+  const all = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+  const urgent = all.filter(c => ['esquecido','atrasado','hoje'].includes(c.status));
+  const list = document.getElementById('alertModalList');
+  if (!urgent.length) {
+    list.innerHTML = '<div style="color:var(--green);padding:20px;text-align:center;">✅ Nenhum alerta! Tudo em dia.</div>';
+  } else {
+    list.innerHTML = urgent.map(({raw: c, status}) => {
+      const [cls, label] = statusLabel(status);
+      return `<div class="modal-item">
+        <div class="modal-item-info">
+          <div class="modal-item-name">${c[1]} <small style="color:var(--text-muted);font-weight:400">(#${c[0]})</small></div>
+          <div class="modal-item-sub">Coleta: dia ${c[3]} · ${c[5]} · Contato: ${c[2]||'—'}</div>
+        </div>
+        <span class="status ${cls}">${label}</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('alertModal').classList.add('open');
+}
+
+function openMonthModal() {
+  const grid = document.getElementById('monthGrid');
+  grid.innerHTML = MONTHS_PT.map((m,i) =>
+    `<button class="month-opt ${i===currentMonth?'active':''}" onclick="selectMonth(${i})">${m}</button>`
+  ).join('');
+
+  const ys = document.getElementById('yearSelect');
+  ys.innerHTML = [currentYear-1, currentYear, currentYear+1].map(y =>
+    `<option value="${y}" ${y===currentYear?'selected':''}>${y}</option>`
+  ).join('');
+  ys.onchange = () => {
+    currentYear = parseInt(ys.value);
+    void refreshStateAndRender();
+  };
+
+  document.getElementById('monthModal').classList.add('open');
+}
+
+function selectMonth(i) {
+  currentMonth = i;
+  document.getElementById('monthName').textContent = MONTHS_PT[i];
+  document.querySelectorAll('.month-opt').forEach((el,idx) =>
+    el.classList.toggle('active', idx === i));
+  void refreshStateAndRender();
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.remove('open');
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  TOAST
+// ═══════════════════════════════════════════════════════════════
+function showToast(type, title, msg) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = `toast ${type}`;
+  t.innerHTML = `<span class="toast-icon">${type==='success'?'✅':'🚨'}</span>
+    <div><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 3500);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  CLOCK + DAILY REMINDER
+// ═══════════════════════════════════════════════════════════════
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleTimeString('pt-BR');
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// Daily reminder at 08:00, 12:00 and 17:00
+function checkDailyReminder() {
+  const now = new Date();
+  const h = now.getHours(), m = now.getMinutes();
+  const isReminderTime = (h === 8 && m === 0) || (h === 12 && m === 0) || (h === 17 && m === 0);
+  if (isReminderTime) {
+    const all = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+    const urgent = all.filter(c => ['esquecido','atrasado','hoje'].includes(c.status));
+    if (urgent.length > 0) {
+      showToast('warning', `🔔 Lembrete (${h}:00)`, `${urgent.length} contrato(s) precisam de atenção!`);
+    }
+  }
+}
+setInterval(checkDailyReminder, 60000);
+
+// ═══════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════
+async function init() {
+  document.getElementById('monthName').textContent = MONTHS_PT[currentMonth];
+  await refreshStateAndRender({ silent: true });
+
+  // Show initial alert if urgent items
+  setTimeout(() => {
+    const all = CONTRATOS_RAW.map(c => ({raw: c, status: getContratoStatus(c)}));
+    const urgent = all.filter(c => ['esquecido','atrasado','hoje'].includes(c.status));
+    if (urgent.length > 0) {
+      showToast('warning', '🚨 Atenção!', `${urgent.length} contrato(s) precisam de faturamento!`);
+    }
+  }, 1000);
+}
+
+void init();
+</script>
+</body>
+</html>

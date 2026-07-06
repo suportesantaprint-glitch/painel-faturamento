@@ -1,0 +1,16 @@
+# AVISO:
+# Este arquivo serve apenas para testes no App Engine Standard.
+# Para este projeto com SQLite, o caminho recomendado e uma VM do Compute Engine,
+# porque o armazenamento local do App Engine nao e persistente.
+runtime: nodejs18
+env: standard
+instance_class: F1
+
+# O App Engine direciona as requisições para a porta 8080 automaticamente
+env_variables:
+  PORT: "8080"
+  HOST: "0.0.0.0"
+
+handlers:
+  - url: /.*
+    script: auto
