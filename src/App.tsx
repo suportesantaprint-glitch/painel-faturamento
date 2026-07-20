@@ -1,6 +1,6 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import "./App.css";
-import { supabase } from "./utils/supabase";
+import { supabase } from "./supabase";
 
 type Faturamento = {
   id: number;
