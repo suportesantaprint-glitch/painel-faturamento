@@ -35,31 +35,33 @@ function App() {
     try {
       setCarregando(true);
       setErro("");
-      const response = await fetch("/api/faturamentos");
 
-      if (!response.ok) {
-        throw new Error("Falha ao carregar faturamentos.");
-      }
+      const { data, error } = await supabase
+        .from("faturamentos")
+        .select("*")
+        .order("id", { ascending: false });
 
-      const dados = (await response.json()) as Faturamento[];
-      setFaturamentos(dados);
-    } catch (error) {
-      setErro("Nao foi possivel carregar os dados.");
+      if (error) throw error;
+
+      setFaturamentos((data as Faturamento[]) || []);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao carregar dados.");
     } finally {
       setCarregando(false);
     }
   }
 
   useEffect(() => {
-    void carregarFaturamentos();
+    carregarFaturamentos();
   }, []);
 
   async function salvarFaturamento(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const valorNumerico = Number(valor);
+
     if (!descricao.trim() || !Number.isFinite(valorNumerico) || valorNumerico < 0) {
-      setErro("Preencha descricao e valor valido.");
+      setErro("Preencha descrição e valor válido.");
       return;
     }
 
@@ -67,32 +69,30 @@ function App() {
       setSalvando(true);
       setErro("");
 
-      const response = await fetch("/api/faturamentos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          descricao: descricao.trim(),
-          valor: valorNumerico,
-          data,
-        }),
-      });
+      const { data: novoItem, error } = await supabase
+        .from("faturamentos")
+        .insert([
+          {
+            descricao: descricao.trim(),
+            valor: valorNumerico,
+            data,
+          },
+        ])
+        .select()
+        .single();
 
-      if (!response.ok) {
-        const erroDaApi = await response.json().catch(() => ({}));
-        const mensagem = String(erroDaApi.mensagem || "Erro ao salvar faturamento.");
-        throw new Error(mensagem);
-      }
+      if (error) throw error;
 
-      const novoItem = (await response.json()) as Faturamento;
-      setFaturamentos((atual) => [novoItem, ...atual]);
+      setFaturamentos((atual) => [
+        novoItem as Faturamento,
+        ...atual,
+      ]);
+
       setDescricao("");
       setValor("");
       setData(dataAtual);
-    } catch (error) {
-      const mensagem = error instanceof Error ? error.message : "Erro ao salvar faturamento.";
-      setErro(mensagem);
+    } catch (err: any) {
+      setErro(err.message || "Erro ao salvar.");
     } finally {
       setSalvando(false);
     }
@@ -102,16 +102,19 @@ function App() {
     <main className="pagina">
       <section className="card">
         <h1>Controle de Faturamento</h1>
-        <p className="subtitulo">Dados salvos em SQLite.</p>
+
+        <p className="subtitulo">
+          Dados salvos no Supabase.
+        </p>
 
         <form className="formulario" onSubmit={salvarFaturamento}>
           <label>
-            Descricao
+            Descrição
             <input
               type="text"
               value={descricao}
-              onChange={(event) => setDescricao(event.target.value)}
-              placeholder="Ex.: Servico mensal"
+              onChange={(e) => setDescricao(e.target.value)}
+              placeholder="Ex.: Serviço Mensal"
               required
             />
           </label>
@@ -123,8 +126,7 @@ function App() {
               step="0.01"
               min="0"
               value={valor}
-              onChange={(event) => setValor(event.target.value)}
-              placeholder="0,00"
+              onChange={(e) => setValor(e.target.value)}
               required
             />
           </label>
@@ -134,7 +136,7 @@ function App() {
             <input
               type="date"
               value={data}
-              onChange={(event) => setData(event.target.value)}
+              onChange={(e) => setData(e.target.value)}
               required
             />
           </label>
@@ -144,17 +146,22 @@ function App() {
           </button>
         </form>
 
-        {erro && <p className="erro">{erro}</p>}
+        {erro && (
+          <p className="erro">
+            {erro}
+          </p>
+        )}
 
         <div className="resumo">
-          <strong>Total:</strong> <span>{moeda.format(total)}</span>
+          <strong>Total:</strong> {moeda.format(total)}
         </div>
 
-        <h2>Lancamentos</h2>
+        <h2>Lançamentos</h2>
+
         {carregando ? (
           <p>Carregando...</p>
         ) : faturamentos.length === 0 ? (
-          <p>Nenhum lancamento salvo ainda.</p>
+          <p>Nenhum lançamento encontrado.</p>
         ) : (
           <ul className="lista">
             {faturamentos.map((item) => (
@@ -163,6 +170,7 @@ function App() {
                   <strong>{item.descricao}</strong>
                   <small>{item.data}</small>
                 </div>
+
                 <span>{moeda.format(Number(item.valor))}</span>
               </li>
             ))}
@@ -171,6 +179,9 @@ function App() {
       </section>
     </main>
   );
+}
+
+export default App;
 }
 
 export default App;
