@@ -1,12 +1,13 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import "./App.css";
+import { supabase } from "./supabase";
 
 type Faturamento = {
   id: number;
   descricao: string;
   valor: number;
   data: string;
-  criadoEm: string;
+  criado_em?: string;
 };
 
 const moeda = new Intl.NumberFormat("pt-BR", {
@@ -16,10 +17,11 @@ const moeda = new Intl.NumberFormat("pt-BR", {
 
 const dataAtual = new Date().toISOString().slice(0, 10);
 
-function App() {
+export default function App() {
   const [descricao, setDescricao] = useState("");
   const [valor, setValor] = useState("");
   const [data, setData] = useState(dataAtual);
+
   const [faturamentos, setFaturamentos] = useState<Faturamento[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
@@ -31,86 +33,109 @@ function App() {
   );
 
   async function carregarFaturamentos() {
-    try {
-      setCarregando(true);
-      setErro("");
-      const response = await fetch("/api/faturamentos");
+    setCarregando(true);
+    setErro("");
 
-      if (!response.ok) {
-        throw new Error("Falha ao carregar faturamentos.");
-      }
+    const { data, error } = await supabase
+      .from("faturamentos")
+      .select("*")
+      .order("data", { ascending: false });
 
-      const dados = (await response.json()) as Faturamento[];
-      setFaturamentos(dados);
-    } catch (error) {
-      setErro("Nao foi possivel carregar os dados.");
-    } finally {
-      setCarregando(false);
+    if (error) {
+      setErro(error.message);
+    } else {
+      setFaturamentos(data ?? []);
     }
+
+    setCarregando(false);
   }
 
   useEffect(() => {
-    void carregarFaturamentos();
+    carregarFaturamentos();
   }, []);
 
   async function salvarFaturamento(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const valorNumerico = Number(valor);
-    if (!descricao.trim() || !Number.isFinite(valorNumerico) || valorNumerico < 0) {
-      setErro("Preencha descricao e valor valido.");
+
+    if (!descricao.trim()) {
+      setErro("Informe uma descrição.");
       return;
     }
 
-    try {
-      setSalvando(true);
-      setErro("");
+    if (!Number.isFinite(valorNumerico) || valorNumerico <= 0) {
+      setErro("Informe um valor válido.");
+      return;
+    }
 
-      const response = await fetch("/api/faturamentos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
+    setErro("");
+    setSalvando(true);
+
+    const { data: novoItem, error } = await supabase
+      .from("faturamentos")
+      .insert([
+        {
           descricao: descricao.trim(),
           valor: valorNumerico,
           data,
-        }),
-      });
+        },
+      ])
+      .select()
+      .single();
 
-      if (!response.ok) {
-        const erroDaApi = await response.json().catch(() => ({}));
-        const mensagem = String(erroDaApi.mensagem || "Erro ao salvar faturamento.");
-        throw new Error(mensagem);
-      }
-
-      const novoItem = (await response.json()) as Faturamento;
-      setFaturamentos((atual) => [novoItem, ...atual]);
-      setDescricao("");
-      setValor("");
-      setData(dataAtual);
-    } catch (error) {
-      const mensagem = error instanceof Error ? error.message : "Erro ao salvar faturamento.";
-      setErro(mensagem);
-    } finally {
+    if (error) {
+      setErro(error.message);
       setSalvando(false);
+      return;
     }
+
+    setFaturamentos((lista) => [novoItem, ...lista]);
+
+    setDescricao("");
+    setValor("");
+    setData(dataAtual);
+
+    setSalvando(false);
+  }
+
+  async function excluirFaturamento(id: number) {
+    const confirmar = window.confirm(
+      "Deseja realmente excluir este lançamento?"
+    );
+
+    if (!confirmar) return;
+
+    const { error } = await supabase
+      .from("faturamentos")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setFaturamentos((lista) => lista.filter((item) => item.id !== id));
   }
 
   return (
     <main className="pagina">
       <section className="card">
         <h1>Controle de Faturamento</h1>
-        <p className="subtitulo">Dados salvos em SQLite.</p>
+        <p className="subtitulo">Dados armazenados no Supabase</p>
 
         <form className="formulario" onSubmit={salvarFaturamento}>
           <label>
-            Descricao
+            Descrição
             <input
               type="text"
               value={descricao}
-              onChange={(event) => setDescricao(event.target.value)}
-              placeholder="Ex.: Servico mensal"
+              onChange={(e) => {
+                setDescricao(e.target.value);
+                setErro("");
+              }}
+              placeholder="Ex.: Serviço mensal"
               required
             />
           </label>
@@ -122,7 +147,10 @@ function App() {
               step="0.01"
               min="0"
               value={valor}
-              onChange={(event) => setValor(event.target.value)}
+              onChange={(e) => {
+                setValor(e.target.value);
+                setErro("");
+              }}
               placeholder="0,00"
               required
             />
@@ -133,7 +161,7 @@ function App() {
             <input
               type="date"
               value={data}
-              onChange={(event) => setData(event.target.value)}
+              onChange={(e) => setData(e.target.value)}
               required
             />
           </label>
@@ -146,23 +174,49 @@ function App() {
         {erro && <p className="erro">{erro}</p>}
 
         <div className="resumo">
-          <strong>Total:</strong> <span>{moeda.format(total)}</span>
+          <p>
+            <strong>Total:</strong> {moeda.format(total)}
+          </p>
+
+          <p>
+            <strong>Lançamentos:</strong> {faturamentos.length}
+          </p>
         </div>
 
-        <h2>Lancamentos</h2>
+        <h2>Lançamentos</h2>
+
         {carregando ? (
           <p>Carregando...</p>
         ) : faturamentos.length === 0 ? (
-          <p>Nenhum lancamento salvo ainda.</p>
+          <p>Nenhum lançamento cadastrado.</p>
         ) : (
           <ul className="lista">
             {faturamentos.map((item) => (
               <li key={item.id}>
                 <div>
                   <strong>{item.descricao}</strong>
-                  <small>{item.data}</small>
+                  <br />
+                  <small>
+                    {new Date(item.data).toLocaleDateString("pt-BR")}
+                  </small>
                 </div>
-                <span>{moeda.format(Number(item.valor))}</span>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    alignItems: "center",
+                  }}
+                >
+                  <span>{moeda.format(item.valor)}</span>
+
+                  <button
+                    type="button"
+                    onClick={() => excluirFaturamento(item.id)}
+                  >
+                    Excluir
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -171,5 +225,3 @@ function App() {
     </main>
   );
 }
-
-export default App;
