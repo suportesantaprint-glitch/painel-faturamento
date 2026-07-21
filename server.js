@@ -13,15 +13,30 @@ const HOST = process.env.HOST || "0.0.0.0";
 const PORT = Number(process.env.PORT || 3001);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const configuredDataDirectory = process.env.DATA_DIR;
+const isVercelRuntime = process.env.VERCEL === "1" || process.env.VERCEL === "true";
 const dataDirectory = configuredDataDirectory
   ? path.isAbsolute(configuredDataDirectory)
     ? configuredDataDirectory
     : path.join(__dirname, configuredDataDirectory)
+  : isVercelRuntime
+    ? path.join(os.tmpdir(), "controle-faturamento")
   : path.join(__dirname, "data");
 const databasePath = path.join(dataDirectory, "faturamento.db");
 const publicDirectory = path.join(__dirname, "public");
 
+function loadInitialContracts() {
+  const html = fs.readFileSync(path.join(publicDirectory, "index.html"), "utf8");
+  const match = html.match(/const CONTRATOS_PADRAO = (\[[\s\S]*?\]);/);
+
+  if (!match) {
+    throw new Error("Lista inicial de contratos não encontrada.");
+  }
+
+  return JSON.parse(match[1].replace(/,\s*\]/g, "]"));
+}
+
 let db;
+let databaseInitialization;
 
 function resolveTlsPair() {
   const envCert = process.env.TLS_CERT_FILE;
@@ -103,6 +118,51 @@ async function initializeDatabase() {
       PRIMARY KEY (ano, mes, contrato_key)
     );
   `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS contratos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      chave TEXT NOT NULL UNIQUE,
+      numero TEXT NOT NULL,
+      cliente TEXT NOT NULL,
+      contato TEXT NOT NULL DEFAULT '',
+      dia_coleta INTEGER NOT NULL CHECK (dia_coleta >= 1 AND dia_coleta <= 31),
+      vencimento TEXT NOT NULL DEFAULT '',
+      processo TEXT NOT NULL DEFAULT '',
+      franquia TEXT NOT NULL DEFAULT '',
+      criado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      atualizado_em TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  await db.exec(`
+    CREATE TABLE IF NOT EXISTS app_config (
+      chave TEXT PRIMARY KEY,
+      valor TEXT NOT NULL
+    );
+  `);
+
+  const contractsSeeded = await db.get(
+    "SELECT valor FROM app_config WHERE chave = 'contratos_iniciais_importados'"
+  );
+  if (!contractsSeeded) {
+    const existingContracts = await db.get("SELECT COUNT(*) AS total FROM contratos");
+    if (existingContracts.total === 0) {
+      const contratosIniciais = loadInitialContracts();
+      for (const [numero, cliente, contato, diaColeta, vencimento, processo, franquia] of contratosIniciais) {
+        await db.run(
+          `
+          INSERT INTO contratos (chave, numero, cliente, contato, dia_coleta, vencimento, processo, franquia)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `,
+          [`${numero}_${cliente}`, String(numero), cliente, contato, diaColeta, vencimento, processo, franquia]
+        );
+      }
+    }
+    await db.run(
+      "INSERT INTO app_config (chave, valor) VALUES ('contratos_iniciais_importados', 'true')"
+    );
+  }
 }
 
 function parseYear(value) {
@@ -121,6 +181,32 @@ function parseMonth(value) {
   return month;
 }
 
+function parseCollectionDay(value) {
+  const day = Number(value);
+  if (!Number.isInteger(day) || day < 1 || day > 31) {
+    return null;
+  }
+  return day;
+}
+
+function parseContractText(value, maxLength = 160) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function contractResponse(row) {
+  return {
+    id: row.id,
+    chave: row.chave,
+    numero: row.numero,
+    cliente: row.cliente,
+    contato: row.contato,
+    diaColeta: row.dia_coleta,
+    vencimento: row.vencimento,
+    processo: row.processo,
+    franquia: row.franquia,
+  };
+}
+
 app.use(cors());
 app.use(express.json());
 app.use(express.static(publicDirectory));
@@ -136,6 +222,7 @@ app.get("/api", (_request, response) => {
     endpoints: [
       "/api/health",
       "/api/faturamentos",
+      "/api/contratos",
       "/api/contratos/status?year=AAAA&month=0-11",
     ],
   });
@@ -143,6 +230,106 @@ app.get("/api", (_request, response) => {
 
 app.get("/api/health", (_request, response) => {
   response.json({ ok: true });
+});
+
+app.get("/api/contratos", async (_request, response) => {
+  try {
+    const rows = await db.all(`
+      SELECT id, chave, numero, cliente, contato, dia_coleta, vencimento, processo, franquia
+      FROM contratos
+      ORDER BY dia_coleta, CAST(numero AS INTEGER), id
+    `);
+    response.json(rows.map(contractResponse));
+  } catch (error) {
+    response.status(500).json({ mensagem: "Erro ao carregar contratos." });
+  }
+});
+
+app.post("/api/contratos", async (request, response) => {
+  const numero = parseContractText(request.body.numero, 80);
+  const cliente = parseContractText(request.body.cliente);
+  const contato = parseContractText(request.body.contato);
+  const diaColeta = parseCollectionDay(request.body.diaColeta);
+  const vencimento = parseContractText(request.body.vencimento);
+  const processo = parseContractText(request.body.processo);
+  const franquia = parseContractText(request.body.franquia, 80);
+
+  if (!numero || !cliente || diaColeta === null) {
+    response.status(400).json({ mensagem: "Informe número, cliente e um dia de coleta entre 1 e 31." });
+    return;
+  }
+
+  try {
+    const temporaryKey = `novo_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const result = await db.run(
+      `
+      INSERT INTO contratos (chave, numero, cliente, contato, dia_coleta, vencimento, processo, franquia)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [temporaryKey, numero, cliente, contato, diaColeta, vencimento, processo, franquia]
+    );
+    const key = `contrato_${result.lastID}`;
+    await db.run(
+      "UPDATE contratos SET chave = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      [key, result.lastID]
+    );
+    const row = await db.get(
+      "SELECT id, chave, numero, cliente, contato, dia_coleta, vencimento, processo, franquia FROM contratos WHERE id = ?",
+      [result.lastID]
+    );
+    response.status(201).json(contractResponse(row));
+  } catch (error) {
+    response.status(500).json({ mensagem: "Erro ao incluir contrato." });
+  }
+});
+
+app.patch("/api/contratos/:id", async (request, response) => {
+  const id = Number(request.params.id);
+  const diaColeta = parseCollectionDay(request.body.diaColeta);
+
+  if (!Number.isInteger(id) || id <= 0 || diaColeta === null) {
+    response.status(400).json({ mensagem: "Dia de coleta inválido." });
+    return;
+  }
+
+  try {
+    const result = await db.run(
+      "UPDATE contratos SET dia_coleta = ?, atualizado_em = CURRENT_TIMESTAMP WHERE id = ?",
+      [diaColeta, id]
+    );
+    if (result.changes === 0) {
+      response.status(404).json({ mensagem: "Contrato não encontrado." });
+      return;
+    }
+    const row = await db.get(
+      "SELECT id, chave, numero, cliente, contato, dia_coleta, vencimento, processo, franquia FROM contratos WHERE id = ?",
+      [id]
+    );
+    response.json(contractResponse(row));
+  } catch (error) {
+    response.status(500).json({ mensagem: "Erro ao atualizar a coleta." });
+  }
+});
+
+app.delete("/api/contratos/:id", async (request, response) => {
+  const id = Number(request.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    response.status(400).json({ mensagem: "Contrato inválido." });
+    return;
+  }
+
+  try {
+    const contract = await db.get("SELECT chave FROM contratos WHERE id = ?", [id]);
+    if (!contract) {
+      response.status(404).json({ mensagem: "Contrato não encontrado." });
+      return;
+    }
+    await db.run("DELETE FROM contratos_status WHERE contrato_key = ?", [contract.chave]);
+    await db.run("DELETE FROM contratos WHERE id = ?", [id]);
+    response.json({ ok: true });
+  } catch (error) {
+    response.status(500).json({ mensagem: "Erro ao excluir contrato." });
+  }
 });
 
 app.get("/api/contratos/status", async (request, response) => {
@@ -316,7 +503,18 @@ app.post("/api/faturamentos", async (request, response) => {
   }
 });
 
-initializeDatabase()
+function ensureDatabase() {
+  if (!databaseInitialization) {
+    databaseInitialization = initializeDatabase().catch((error) => {
+      databaseInitialization = undefined;
+      throw error;
+    });
+  }
+  return databaseInitialization;
+}
+
+function startServer() {
+  ensureDatabase()
   .then(() => {
     const tlsPair = resolveTlsPair();
     const server = tlsPair
@@ -351,3 +549,13 @@ initializeDatabase()
     console.error("Falha ao iniciar banco SQLite:", error);
     process.exit(1);
   });
+}
+
+if (require.main === module) {
+  startServer();
+}
+
+module.exports = {
+  app,
+  ensureDatabase,
+};

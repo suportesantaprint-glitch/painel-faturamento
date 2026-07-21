@@ -320,6 +320,23 @@
     transition: all 0.15s;
   }
   .btn-faturado-ok:hover { border-color: var(--red); color: var(--red); }
+  .row-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 260px; }
+  .btn-edit, .btn-delete {
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-edit { color: var(--blue); }
+  .btn-edit:hover { background: var(--blue-bg); border-color: var(--blue); }
+  .btn-delete { color: var(--text-muted); }
+  .btn-delete:hover { background: var(--red-bg); border-color: var(--red); color: var(--red); }
+  .btn-new { border-color: #1a5e2a; color: var(--green); }
+  .btn-new:hover { background: var(--green-bg); border-color: var(--green); color: var(--green); }
 
   /* ── MODAL ── */
   .modal-overlay {
@@ -373,6 +390,25 @@
     transition: background 0.15s;
   }
   .modal-close:hover { background: var(--border); }
+  .contract-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .contract-form .field { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-muted); }
+  .contract-form .field.full { grid-column: 1 / -1; }
+  .contract-form input {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text);
+    padding: 9px 10px;
+    font: inherit;
+    outline: none;
+  }
+  .contract-form input:focus { border-color: var(--blue); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .modal-actions .modal-close { width: auto; margin-top: 0; }
+  .modal-save { background: var(--green); color: #06120a; border: 1px solid var(--green); border-radius: 8px; padding: 10px 20px; font: inherit; font-weight: 700; cursor: pointer; }
+  .modal-save:hover { filter: brightness(1.08); }
+  .form-error { color: var(--red); font-size: 12px; margin-top: 12px; min-height: 16px; }
 
   /* ── TOAST ── */
   #toast-container {
@@ -574,6 +610,7 @@
       <button class="filter-btn" onclick="toggleSort()" id="sortBtn">📅 Ordenar por Coleta</button>
       <button class="filter-btn" onclick="filterView('atrasado',null)">🔴 Só Atrasados</button>
       <button class="filter-btn" onclick="filterView('todos',null)">📋 Todos</button>
+      <button class="filter-btn btn-new" onclick="openNewContractModal()">＋ Novo contrato</button>
     </div>
 
     <!-- TABLE -->
@@ -625,14 +662,50 @@
   </div>
 </div>
 
+<!-- CONTRACT MODALS -->
+<div class="modal-overlay" id="newContractModal">
+  <div class="modal">
+    <div class="modal-title">＋ Incluir contrato</div>
+    <form class="contract-form" id="newContractForm" onsubmit="saveNewContract(event)">
+      <label class="field">Número do contrato<input name="numero" type="text" maxlength="80" required></label>
+      <label class="field">Dia da coleta<input name="diaColeta" type="number" min="1" max="31" required></label>
+      <label class="field full">Cliente<input name="cliente" type="text" maxlength="160" required></label>
+      <label class="field">Contato<input name="contato" type="text" maxlength="160"></label>
+      <label class="field">Vencimento<input name="vencimento" type="text" maxlength="160" placeholder="Ex.: Todo dia 10"></label>
+      <label class="field">Processo<input name="processo" type="text" maxlength="160" placeholder="Ex.: DOC/WHATS"></label>
+      <label class="field">Franquia<input name="franquia" type="text" maxlength="80" placeholder="Ex.: Sim"></label>
+      <div class="field full form-error" id="newContractError"></div>
+      <div class="field full modal-actions">
+        <button type="button" class="modal-close" onclick="closeModal('newContractModal')">Cancelar</button>
+        <button type="submit" class="modal-save">Salvar contrato</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="modal-overlay" id="collectionModal">
+  <div class="modal" style="width:380px;">
+    <div class="modal-title">📅 Alterar dia da coleta</div>
+    <form class="contract-form" id="collectionForm" onsubmit="saveCollectionDay(event)">
+      <input type="hidden" name="contractId">
+      <label class="field full">Dia da coleta<input name="diaColeta" type="number" min="1" max="31" required></label>
+      <div class="field full form-error" id="collectionError"></div>
+      <div class="field full modal-actions">
+        <button type="button" class="modal-close" onclick="closeModal('collectionModal')">Cancelar</button>
+        <button type="submit" class="modal-save">Salvar alteração</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <!-- TOAST CONTAINER -->
 <div id="toast-container"></div>
 
 <script>
 // ═══════════════════════════════════════════════════════════════
-//  DATA — todos os contratos da planilha
+//  DATA — contratos originais usados somente na primeira migração do SQLite
 // ═══════════════════════════════════════════════════════════════
-const CONTRATOS_RAW = [
+const CONTRATOS_PADRAO = [
   [205,"FTC","GABRIEL",16,"7 dias corridos","DOC/WHATS","Sim"],
   [238,"FTC","GABRIEL",16,"7 dias corridos","ZEBRA","Sim"],
   [393,"HOSPITAL SANTA TEREZINHA","RODRIGO",18,"Todo dia 10","WHATS","Não"],
@@ -791,6 +864,8 @@ const CONTRATOS_RAW = [
   [408,"PLASZOM IV","ARTHUR",15,"10 dias corridos","WHATS","Sim"],
 ];
 
+let CONTRATOS_RAW = [];
+
 // ═══════════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════════
@@ -809,11 +884,48 @@ const MONTHS_PT = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho'
 const API_BASE = window.location.port === '3000'
   ? `${window.location.protocol}//${window.location.hostname}:3001`
   : window.location.origin;
+const CONTRACTS_API = `${API_BASE}/api/contratos`;
 const STATUS_API = `${API_BASE}/api/contratos/status`;
 let syncRequestId = 0;
 
 function dataAtualPtBr() {
   return new Date().toLocaleDateString('pt-BR');
+}
+
+function getContratoKey(c) {
+  return c[7];
+}
+
+function getContratoId(c) {
+  return c[8];
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, char => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  }[char]));
+}
+
+async function loadContracts(options = {}) {
+  const silent = Boolean(options.silent);
+
+  try {
+    const response = await fetch(CONTRACTS_API);
+    if (!response.ok) {
+      throw new Error('Falha ao buscar contratos');
+    }
+    const payload = await response.json();
+    CONTRATOS_RAW = payload.map(c => [
+      c.numero, c.cliente, c.contato, Number(c.diaColeta), c.vencimento, c.processo, c.franquia,
+      c.chave, Number(c.id)
+    ]);
+    return true;
+  } catch (error) {
+    if (!silent) {
+      showToast('warning', '⚠️ Sem conexão', 'Não foi possível carregar os contratos do SQLite.');
+    }
+    return false;
+  }
 }
 
 async function loadStateForMonth(ano, mes, options = {}) {
@@ -871,7 +983,10 @@ async function clearMonthState(ano, mes) {
 
 async function refreshStateAndRender(options = {}) {
   const requestId = ++syncRequestId;
-  await loadStateForMonth(currentYear, currentMonth, options);
+  await Promise.all([
+    loadContracts(options),
+    loadStateForMonth(currentYear, currentMonth, options),
+  ]);
   if (requestId !== syncRequestId) return;
   renderTable();
 }
@@ -880,7 +995,7 @@ async function refreshStateAndRender(options = {}) {
 //  CONTRATOS — compute status
 // ═══════════════════════════════════════════════════════════════
 function getContratoStatus(c) {
-  const key = `${c[0]}_${c[1]}`;
+  const key = getContratoKey(c);
   const state = faturadoState[key];
   if (state && state.faturado) return 'faturado';
 
@@ -952,7 +1067,8 @@ function renderTable() {
   let lastDay = null;
 
   list.forEach(({raw: c, status}) => {
-    const key = `${c[0]}_${c[1]}`;
+    const key = getContratoKey(c);
+    const contractId = getContratoId(c);
     const day = c[3];
     const [cls, label] = statusLabel(status);
 
@@ -975,15 +1091,15 @@ function renderTable() {
       : `<button class="btn-faturar" onclick="toggleFaturado('${key}')">Marcar Faturado</button>`;
 
     html += `
-      <tr data-key="${key}">
-        <td class="cont">${c[0]}</td>
-        <td class="cliente">${c[1]}</td>
-        <td>${c[2] || '—'}</td>
+      <tr data-key="${escapeHtml(key)}">
+        <td class="cont">${escapeHtml(c[0])}</td>
+        <td class="cliente">${escapeHtml(c[1])}</td>
+        <td>${escapeHtml(c[2] || '—')}</td>
         <td><span class="day-badge ${dayCls}">${day}</span></td>
-        <td style="font-size:12px;color:var(--text-muted)">${c[4]}</td>
-        <td><code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;">${c[5]}</code></td>
+        <td style="font-size:12px;color:var(--text-muted)">${escapeHtml(c[4])}</td>
+        <td><code style="background:var(--surface2);padding:2px 6px;border-radius:4px;font-size:11px;">${escapeHtml(c[5])}</code></td>
         <td><span class="status ${cls}">${label}</span></td>
-        <td>${actionBtn}</td>
+        <td><div class="row-actions">${actionBtn}<button class="btn-edit" onclick="openCollectionModal(${contractId})">✏️ Coleta</button><button class="btn-delete" onclick="deleteContract(${contractId})">Excluir</button></div></td>
       </tr>`;
   });
 
@@ -1046,7 +1162,7 @@ async function toggleFaturado(key) {
   faturadoState[key].faturado = nowFat;
   if (nowFat) {
     faturadoState[key].data = dataAtualPtBr();
-    const c = CONTRATOS_RAW.find(x => `${x[0]}_${x[1]}` === key);
+    const c = CONTRATOS_RAW.find(x => getContratoKey(x) === key);
     showToast('success', '✅ Faturado!', `${c ? c[1] : key} marcado como faturado`);
   } else {
     delete faturadoState[key].data;
@@ -1061,6 +1177,97 @@ async function toggleFaturado(key) {
     else delete faturadoState[key];
     renderTable();
     showToast('warning', '⚠️ Falha ao salvar', 'Não foi possível atualizar no SQLite.');
+  }
+}
+
+async function getApiMessage(response, fallback) {
+  const payload = await response.json().catch(() => ({}));
+  return payload.mensagem || fallback;
+}
+
+function openNewContractModal() {
+  const form = document.getElementById('newContractForm');
+  form.reset();
+  document.getElementById('newContractError').textContent = '';
+  document.getElementById('newContractModal').classList.add('open');
+  form.elements.numero.focus();
+}
+
+async function saveNewContract(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const error = document.getElementById('newContractError');
+  const data = Object.fromEntries(new FormData(form).entries());
+  error.textContent = '';
+
+  try {
+    const response = await fetch(CONTRACTS_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      throw new Error(await getApiMessage(response, 'Não foi possível incluir o contrato.'));
+    }
+    closeModal('newContractModal');
+    await refreshStateAndRender({ silent: true });
+    showToast('success', '✅ Contrato incluído', 'O novo contrato foi salvo no SQLite.');
+  } catch (requestError) {
+    error.textContent = requestError instanceof Error ? requestError.message : 'Não foi possível incluir o contrato.';
+  }
+}
+
+function openCollectionModal(contractId) {
+  const contract = CONTRATOS_RAW.find(c => getContratoId(c) === contractId);
+  if (!contract) return;
+
+  const form = document.getElementById('collectionForm');
+  form.elements.contractId.value = String(contractId);
+  form.elements.diaColeta.value = String(contract[3]);
+  document.getElementById('collectionError').textContent = '';
+  document.getElementById('collectionModal').classList.add('open');
+  form.elements.diaColeta.focus();
+}
+
+async function saveCollectionDay(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const contractId = Number(form.elements.contractId.value);
+  const error = document.getElementById('collectionError');
+  error.textContent = '';
+
+  try {
+    const response = await fetch(`${CONTRACTS_API}/${contractId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ diaColeta: form.elements.diaColeta.value }),
+    });
+    if (!response.ok) {
+      throw new Error(await getApiMessage(response, 'Não foi possível alterar a coleta.'));
+    }
+    closeModal('collectionModal');
+    await refreshStateAndRender({ silent: true });
+    showToast('success', '📅 Coleta atualizada', 'O novo dia de coleta foi salvo.');
+  } catch (requestError) {
+    error.textContent = requestError instanceof Error ? requestError.message : 'Não foi possível alterar a coleta.';
+  }
+}
+
+async function deleteContract(contractId) {
+  const contract = CONTRATOS_RAW.find(c => getContratoId(c) === contractId);
+  if (!contract) return;
+  if (!confirm(`Excluir o contrato ${contract[0]} — ${contract[1]}? Esta ação não pode ser desfeita.`)) return;
+
+  try {
+    const response = await fetch(`${CONTRACTS_API}/${contractId}`, { method: 'DELETE' });
+    if (!response.ok) {
+      throw new Error(await getApiMessage(response, 'Não foi possível excluir o contrato.'));
+    }
+    delete faturadoState[getContratoKey(contract)];
+    await refreshStateAndRender({ silent: true });
+    showToast('success', '🗑️ Contrato excluído', 'O contrato e seus status foram removidos.');
+  } catch (requestError) {
+    showToast('warning', '⚠️ Falha ao excluir', requestError instanceof Error ? requestError.message : 'Não foi possível excluir o contrato.');
   }
 }
 
@@ -1118,8 +1325,8 @@ function openAlertModal() {
       const [cls, label] = statusLabel(status);
       return `<div class="modal-item">
         <div class="modal-item-info">
-          <div class="modal-item-name">${c[1]} <small style="color:var(--text-muted);font-weight:400">(#${c[0]})</small></div>
-          <div class="modal-item-sub">Coleta: dia ${c[3]} · ${c[5]} · Contato: ${c[2]||'—'}</div>
+          <div class="modal-item-name">${escapeHtml(c[1])} <small style="color:var(--text-muted);font-weight:400">(#${escapeHtml(c[0])})</small></div>
+          <div class="modal-item-sub">Coleta: dia ${c[3]} · ${escapeHtml(c[5])} · Contato: ${escapeHtml(c[2]||'—')}</div>
         </div>
         <span class="status ${cls}">${label}</span>
       </div>`;
@@ -1166,7 +1373,7 @@ function showToast(type, title, msg) {
   const t = document.createElement('div');
   t.className = `toast ${type}`;
   t.innerHTML = `<span class="toast-icon">${type==='success'?'✅':'🚨'}</span>
-    <div><div class="toast-title">${title}</div><div class="toast-msg">${msg}</div></div>`;
+    <div><div class="toast-title">${escapeHtml(title)}</div><div class="toast-msg">${escapeHtml(msg)}</div></div>`;
   c.appendChild(t);
   setTimeout(() => { t.style.opacity='0'; t.style.transform='translateX(40px)'; t.style.transition='all 0.3s'; setTimeout(()=>t.remove(),300); }, 3500);
 }
