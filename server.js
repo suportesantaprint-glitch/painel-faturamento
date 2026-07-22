@@ -572,7 +572,4 @@ if (require.main === module) {
   startServer();
 }
 
-module.exports = {
-  app,
-  ensureDatabase,
-};
+module.exports = app;
