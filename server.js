@@ -13,15 +13,29 @@ const PORT = Number(process.env.PORT || 3001);
 const NODE_ENV = process.env.NODE_ENV || "development";
 const publicDirectory = path.join(__dirname, "public");
 
+// ==========================================
 // Configuração do Supabase Client
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
+// ==========================================
+
+const SUPABASE_URL = process.env.SUPABASE_URL || process.env.REACT_APP_SUPABASE_URL;
+
+// No Node.js (backend), dê preferência à SUPABASE_SERVICE_ROLE_KEY se disponível.
+// Se não, usa a chave de publicação (Anon Key).
+const SUPABASE_KEY =
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  process.env.REACT_APP_SUPABASE_PUBLISHABLE_KEY ||
+  process.env.REACT_APP_SUPABASE_ANON_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
-  console.error("ERRO: SUPABASE_URL e SUPABASE_ANON_KEY/SERVICE_ROLE_KEY devem estar definidos nas variáveis de ambiente.");
+  console.error("ERRO: Variáveis de ambiente do Supabase não encontradas! Verifique o seu .env");
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ==========================================
+// Funções Auxiliares
+// ==========================================
 
 function loadInitialContracts() {
   const html = fs.readFileSync(path.join(publicDirectory, "index.html"), "utf8");
@@ -85,7 +99,46 @@ function getLocalIpv4Addresses() {
   return addresses;
 }
 
-// Inicialização/Semente de dados padrão via Supabase
+function parseYear(value) {
+  const year = Number(value);
+  if (!Number.isInteger(year) || year < 2000 || year > 3000) return null;
+  return year;
+}
+
+function parseMonth(value) {
+  const month = Number(value);
+  if (!Number.isInteger(month) || month < 0 || month > 11) return null;
+  return month;
+}
+
+function parseCollectionDay(value) {
+  const day = Number(value);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
+  return day;
+}
+
+function parseContractText(value, maxLength = 160) {
+  return String(value || "").trim().slice(0, maxLength);
+}
+
+function contractResponse(row) {
+  return {
+    id: row.id,
+    chave: row.chave,
+    numero: row.numero,
+    cliente: row.cliente,
+    contato: row.contato,
+    diaColeta: row.dia_coleta,
+    vencimento: row.vencimento,
+    processo: row.processo,
+    franquia: row.franquia,
+  };
+}
+
+// ==========================================
+// Inicialização do Banco (Supabase)
+// ==========================================
+
 async function initializeDatabase() {
   const { data: contractsSeeded } = await supabase
     .from("app_config")
@@ -125,41 +178,9 @@ async function initializeDatabase() {
   }
 }
 
-function parseYear(value) {
-  const year = Number(value);
-  if (!Number.isInteger(year) || year < 2000 || year > 3000) return null;
-  return year;
-}
-
-function parseMonth(value) {
-  const month = Number(value);
-  if (!Number.isInteger(month) || month < 0 || month > 11) return null;
-  return month;
-}
-
-function parseCollectionDay(value) {
-  const day = Number(value);
-  if (!Number.isInteger(day) || day < 1 || day > 31) return null;
-  return day;
-}
-
-function parseContractText(value, maxLength = 160) {
-  return String(value || "").trim().slice(0, maxLength);
-}
-
-function contractResponse(row) {
-  return {
-    id: row.id,
-    chave: row.chave,
-    numero: row.numero,
-    cliente: row.cliente,
-    contato: row.contato,
-    diaColeta: row.dia_coleta,
-    vencimento: row.vencimento,
-    processo: row.processo,
-    franquia: row.franquia,
-  };
-}
+// ==========================================
+// Configuração do Express
+// ==========================================
 
 app.use(cors());
 app.use(express.json());
@@ -186,6 +207,10 @@ app.get("/api/health", (_request, response) => {
   response.json({ ok: true });
 });
 
+// ==========================================
+// Rotas de Contratos
+// ==========================================
+
 app.get("/api/contratos", async (_request, response) => {
   try {
     const { data: rows, error } = await supabase
@@ -196,7 +221,6 @@ app.get("/api/contratos", async (_request, response) => {
 
     if (error) throw error;
 
-    // Ordenação secundária por número (garantindo cast numérico igual ao SQLite original)
     rows.sort((a, b) => {
       if (a.dia_coleta !== b.dia_coleta) return a.dia_coleta - b.dia_coleta;
       const numA = parseInt(a.numero, 10) || 0;
@@ -207,6 +231,7 @@ app.get("/api/contratos", async (_request, response) => {
 
     response.json(rows.map(contractResponse));
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao carregar contratos." });
   }
 });
@@ -228,7 +253,6 @@ app.post("/api/contratos", async (request, response) => {
   try {
     const temporaryKey = `novo_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 
-    // 1. Cria o registro inicial com chave temporária
     const { data: created, error: insertError } = await supabase
       .from("contratos")
       .insert({
@@ -246,7 +270,6 @@ app.post("/api/contratos", async (request, response) => {
 
     if (insertError) throw insertError;
 
-    // 2. Atualiza a chave com base no ID retornado
     const finalKey = `contrato_${created.id}`;
     const { data: updated, error: updateError } = await supabase
       .from("contratos")
@@ -259,6 +282,7 @@ app.post("/api/contratos", async (request, response) => {
 
     response.status(201).json(contractResponse(updated));
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao incluir contrato." });
   }
 });
@@ -288,6 +312,7 @@ app.patch("/api/contratos/:id", async (request, response) => {
 
     response.json(contractResponse(data));
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao atualizar a coleta." });
   }
 });
@@ -317,9 +342,14 @@ app.delete("/api/contratos/:id", async (request, response) => {
 
     response.json({ ok: true });
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao excluir contrato." });
   }
 });
+
+// ==========================================
+// Rotas de Status dos Contratos
+// ==========================================
 
 app.get("/api/contratos/status", async (request, response) => {
   const year = parseYear(request.query.year);
@@ -349,6 +379,7 @@ app.get("/api/contratos/status", async (request, response) => {
 
     response.json({ ano: year, mes: month, state });
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao carregar status dos contratos." });
   }
 });
@@ -391,6 +422,7 @@ app.put("/api/contratos/status", async (request, response) => {
 
     response.json({ ok: true });
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao salvar status do contrato." });
   }
 });
@@ -415,9 +447,14 @@ app.delete("/api/contratos/status", async (request, response) => {
 
     response.json({ ok: true });
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao resetar status do mes." });
   }
 });
+
+// ==========================================
+// Rotas de Faturamentos
+// ==========================================
 
 app.get("/api/faturamentos", async (_request, response) => {
   try {
@@ -439,6 +476,7 @@ app.get("/api/faturamentos", async (_request, response) => {
 
     response.json(formattedRows);
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao buscar faturamentos." });
   }
 });
@@ -480,9 +518,14 @@ app.post("/api/faturamentos", async (request, response) => {
       criadoEm: novoItem.criado_em,
     });
   } catch (error) {
+    console.error(error);
     response.status(500).json({ mensagem: "Erro ao salvar faturamento." });
   }
 });
+
+// ==========================================
+// Inicialização do Servidor
+// ==========================================
 
 let databaseInitialization;
 function ensureDatabase() {
@@ -520,7 +563,7 @@ function startServer() {
       });
     })
     .catch((error) => {
-      console.error("Falha ao inicializar o Supabase:", error);
+      console.error("Falha ao inicializar a conexão com o Supabase:", error);
       process.exit(1);
     });
 }
